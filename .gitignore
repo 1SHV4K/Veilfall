@@ -16,10 +16,19 @@ gradle-app.setting
 
 ## Java:
 *.class
+*.jar
 *.war
 *.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+*.log
+*.ctxt
 hs_err_pid*
+replay_pid*
 .attach_pid*
+.mtj.tmp/
 
 ## Android:
 /android/libs/armeabi-v7a/
