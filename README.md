@@ -4,7 +4,7 @@ A stylized action RPG built with Java and libGDX.
 
 A [libGDX](https://libgdx.com/) project generated with [gdx-liftoff](https://github.com/libgdx/gdx-liftoff).
 
-This project was generated with a template including simple application launchers and an empty `ApplicationAdapter` extension.
+The desktop application currently renders a primitive 3D test scene. Use the mouse wheel to zoom and press `P` to switch between orthographic and perspective projection.
 
 ## Platforms
 
