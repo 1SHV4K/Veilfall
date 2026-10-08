@@ -16,7 +16,7 @@ public abstract class World implements Disposable {
         instances.add(instance);
         return instance;
     }
-
+    
     public Iterable<ModelInstance> getInstances() {
         return instances;
     }
