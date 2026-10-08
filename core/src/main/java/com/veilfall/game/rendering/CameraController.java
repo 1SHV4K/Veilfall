@@ -31,6 +31,11 @@ public final class CameraController extends InputAdapter {
         return projection == Projection.ORTHOGRAPHIC ? orthographicCamera : perspectiveCamera;
     }
 
+    public void setTargetPosition(float x, float z) {
+        target.set(x, 0f, z);
+        updateCameras();
+    }
+
     public void resize(int width, int height) {
         screenWidth = Math.max(width, 1);
         screenHeight = Math.max(height, 1);

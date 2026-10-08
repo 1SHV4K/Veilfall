@@ -24,6 +24,7 @@ import com.veilfall.game.screens.UiTheme;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Objects;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
 public class VeilfallGame extends Game {
@@ -96,9 +97,15 @@ public class VeilfallGame extends Game {
 	}
 
 	public void startBattle(ArenaData arena) {
-		if (selectedCharacter == null) {
-			throw new GdxRuntimeException("Cannot start a battle without a selected character");
+		try {
+			selectedCharacter = characterRepository.getAll().stream()
+					.filter(character -> character.getName().equals("Warden"))
+					.findFirst()
+					.orElseThrow(() -> new SQLException("Warden character definition is missing"));
+		} catch (SQLException exception) {
+			throw new GdxRuntimeException("Failed to load Warden from SQLite", exception);
 		}
+		Objects.requireNonNull(arena, "Selected arena must not be null");
 		transitionTo(new BattleScreen(this, arena, selectedCharacter));
 	}
 
