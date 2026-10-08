@@ -1,6 +1,7 @@
 package com.veilfall.game.database;
 
 import com.veilfall.game.data.PlayerData;
+import com.veilfall.game.data.WaveEnemyData;
 import com.veilfall.game.database.repository.ArenaRepository;
 import com.veilfall.game.database.repository.CharacterRepository;
 import com.veilfall.game.database.repository.MobRepository;
@@ -12,6 +13,9 @@ import com.veilfall.game.database.repository.WeaponRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public final class DatabaseSmokeTest {
     private DatabaseSmokeTest() {
@@ -48,8 +52,22 @@ public final class DatabaseSmokeTest {
                             .findFirst().orElseThrow().getId()).size() == 3, "expected 3 Warden skills");
             require(new MobRepository(manager).getAll().size() == 4, "expected 4 mobs");
             require(new ArenaRepository(manager).getAll().size() == 1, "expected Mistwood arena");
-            require(new WaveRepository(manager).getWavesForArena(
-                    new ArenaRepository(manager).getAll().getFirst().getId()).size() == 5, "expected 5 waves");
+            var waves = new WaveRepository(manager);
+            var arenaWaves = waves.getWavesForArena(new ArenaRepository(manager).getAll().getFirst().getId());
+            require(arenaWaves.size() == 5, "expected 5 waves");
+            require(arenaWaves.get(4).isBossWave(), "wave 5 should be the boss wave");
+            require(arenaWaves.get(0).getHealthMultiplier() > 0
+                    && arenaWaves.get(0).getDamageMultiplier() > 0, "wave multipliers should be positive");
+            require(enemyComposition(waves.getEnemiesForWave(arenaWaves.get(0).getId()))
+                    .equals(Map.of("Veil Wretch", 5)), "wave 1 composition mismatch");
+            require(enemyComposition(waves.getEnemiesForWave(arenaWaves.get(1).getId()))
+                    .equals(Map.of("Veil Wretch", 6, "Bone Stalker", 2)), "wave 2 composition mismatch");
+            require(enemyComposition(waves.getEnemiesForWave(arenaWaves.get(2).getId()))
+                    .equals(Map.of("Veil Wretch", 8, "Bone Stalker", 3)), "wave 3 composition mismatch");
+            require(enemyComposition(waves.getEnemiesForWave(arenaWaves.get(3).getId()))
+                    .equals(Map.of("Bone Stalker", 4, "Veil Brute", 2)), "wave 4 composition mismatch");
+            require(enemyComposition(waves.getEnemiesForWave(arenaWaves.get(4).getId()))
+                    .equals(Map.of("Hollow Knight", 1)), "wave 5 composition mismatch");
             int waveEnemyDefinitions = manager.withConnection(connection -> {
                 try (var statement = connection.prepareStatement("SELECT COUNT(*) FROM wave_enemies");
                      var result = statement.executeQuery()) {
@@ -77,6 +95,12 @@ public final class DatabaseSmokeTest {
                 return result.getInt(1);
             }
         });
+    }
+
+    private static Map<String, Integer> enemyComposition(List<WaveEnemyData> enemies) {
+        return enemies.stream().collect(Collectors.toMap(
+                WaveEnemyData::getMobName,
+                WaveEnemyData::getQuantity));
     }
 
     private static void require(boolean condition, String message) {

@@ -141,17 +141,23 @@ public final class Enemy implements Disposable {
     }
 
     private void updateModel() {
-        instances.get(0).transform.setToTranslation(position.x, 0.72f, position.z);
-        instances.get(1).transform.setToTranslation(position.x, 1.55f, position.z);
+        float bodyScale = data.isBoss() ? 2.2f : 1f;
+        float headScale = data.isBoss() ? 1.7f : 1f;
+        instances.get(0).transform.setToTranslation(position.x, 0.72f * bodyScale, position.z)
+                .scale(bodyScale, bodyScale, bodyScale);
+        instances.get(1).transform.setToTranslation(position.x, 1.55f * bodyScale, position.z)
+                .scale(headScale, headScale, headScale);
         updateHealthBar();
     }
 
     private void updateHealthBar() {
         float ratio = currentHealth / (float) maxHealth;
-        float width = 0.95f * ratio;
-        instances.get(2).transform.setToTranslation(position.x, 2.05f, position.z);
+        float width = data.isBoss() ? 0f : 0.95f * ratio;
+        float y = data.isBoss() ? 0f : 2.05f;
+        instances.get(2).transform.setToTranslation(position.x, y, position.z)
+                .scale(data.isBoss() ? 0.001f : 1f, 1f, 1f);
         instances.get(3).transform.setToTranslation(position.x - 0.475f + width * 0.5f,
-                2.05f, position.z + 0.01f).scale(width, 1f, 1f);
+                y, position.z + 0.01f).scale(width, 1f, 1f);
     }
 
     private void setBodyColor(Color color) {

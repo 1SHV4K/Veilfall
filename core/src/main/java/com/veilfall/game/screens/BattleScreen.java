@@ -23,6 +23,7 @@ import com.veilfall.game.enemies.EnemyManager;
 import com.veilfall.game.player.Player;
 import com.veilfall.game.player.PlayerCombat;
 import com.veilfall.game.player.PlayerController;
+import com.veilfall.game.waves.WaveManager;
 
 import java.sql.SQLException;
 
@@ -33,8 +34,10 @@ public final class BattleScreen extends AbstractGameScreen {
     private final PlayerCombat playerCombat;
     private final PlayerController playerController;
     private final EnemyManager enemyManager;
+    private final WaveManager waveManager;
     private final Label healthLabel;
     private final Label enemiesLabel;
+    private final Label waveLabel;
     private final Label shieldBashLabel;
     private final Label groundSlamLabel;
     private final Label veilGuardLabel;
@@ -58,6 +61,8 @@ public final class BattleScreen extends AbstractGameScreen {
             player = new Player(character, weapon);
             playerCombat = new PlayerCombat(player, skills);
             enemyManager = new EnemyManager(game.getMobRepository());
+            waveManager = new WaveManager(arena.getId(), game.getWaveRepository());
+            waveManager.start(enemyManager);
         } catch (SQLException | IllegalArgumentException exception) {
             throw new GdxRuntimeException("Failed to load battle definitions from SQLite", exception);
         }
@@ -70,6 +75,8 @@ public final class BattleScreen extends AbstractGameScreen {
         Label title = game.getUiTheme().label(arena.getName());
         title.setFontScale(1.25f);
         hud.add(title).left().padBottom(7f).row();
+        waveLabel = game.getUiTheme().label("");
+        hud.add(waveLabel).left().padBottom(7f).row();
         healthLabel = game.getUiTheme().label("");
         hud.add(healthLabel).left().padBottom(4f).row();
 
@@ -123,6 +130,11 @@ public final class BattleScreen extends AbstractGameScreen {
         playerCombat.update(frameDelta);
         playerController.update(frameDelta);
         enemyManager.update(player, frameDelta);
+        try {
+            waveManager.update(frameDelta, enemyManager);
+        } catch (SQLException exception) {
+            throw new GdxRuntimeException("Failed to spawn the next arena wave", exception);
+        }
         game.getRenderer().getCameraController().setTargetPosition(player.getX(), player.getZ());
         updateHud();
 
@@ -130,7 +142,7 @@ public final class BattleScreen extends AbstractGameScreen {
             showResult(false);
             return;
         }
-        if (enemyManager.isCleared()) {
+        if (waveManager.getState() == WaveManager.State.COMPLETE) {
             showResult(true);
             return;
         }
@@ -145,6 +157,7 @@ public final class BattleScreen extends AbstractGameScreen {
     }
 
     private void updateHud() {
+        updateWaveLabel();
         healthLabel.setText(character.getName() + " HP: " + player.getCurrentHealth()
                 + " / " + player.getMaxHealth());
         enemiesLabel.setText("Enemies Remaining: " + enemyManager.getAliveCount());
@@ -155,6 +168,22 @@ public final class BattleScreen extends AbstractGameScreen {
                 player.isGuarding() ? String.format("R Veil Guard %.1fs", player.getGuardRemaining()) : "R Veil Guard",
                 playerCombat.getVeilGuardCooldownRemaining());
         updateAbilityLabel(dodgeLabel, "SPACE Dodge", playerCombat.getDodgeCooldownRemaining());
+    }
+
+    private void updateWaveLabel() {
+        switch (waveManager.getState()) {
+            case WAITING -> waveLabel.setText("WAVE 0 / " + waveManager.getTotalWaves());
+            case SPAWNING, ACTIVE -> waveLabel.setText("WAVE " + waveManager.getCurrentWaveNumber()
+                    + " / " + waveManager.getTotalWaves());
+            case INTERMISSION -> {
+                int seconds = (int) Math.ceil(waveManager.getIntermissionRemaining());
+                waveLabel.setText(seconds > 0
+                        ? "WAVE CLEARED — NEXT WAVE " + (waveManager.getCurrentWaveNumber() + 1)
+                        + " IN " + seconds
+                        : "WAVE CLEARED — START");
+            }
+            case COMPLETE -> waveLabel.setText("ALL WAVES CLEARED");
+        }
     }
 
     private static void updateAbilityLabel(Label label, String name, float cooldownRemaining) {
@@ -170,7 +199,8 @@ public final class BattleScreen extends AbstractGameScreen {
     private void showResult(boolean victory) {
         resultShown = true;
         game.showResult(new BattleOutcome(victory, character.getName(), arena.getName(),
-                victory ? 1 : 0, enemyManager.getEnemiesDefeated(), 0, elapsedSeconds));
+                victory ? waveManager.getTotalWaves() : Math.max(0, waveManager.getCurrentWaveNumber() - 1),
+                enemyManager.getEnemiesDefeated(), enemyManager.getBossesDefeated(), elapsedSeconds));
     }
 
     @Override
