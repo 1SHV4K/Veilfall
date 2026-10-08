@@ -32,5 +32,17 @@ public final class PlayerController extends InputAdapter {
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             combat.attack(enemies);
         }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.Q)) {
+            combat.shieldBash(enemies);
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.E)) {
+            combat.groundSlam(enemies);
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+            combat.activateVeilGuard();
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
+            combat.dodge(horizontal, depth);
+        }
     }
 }

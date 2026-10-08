@@ -8,7 +8,6 @@ import com.veilfall.game.database.repository.MobRepository;
 import com.veilfall.game.player.Player;
 
 import java.sql.SQLException;
-import java.util.List;
 
 public final class EnemyManager implements Disposable {
     private static final float[][] SPAWN_POSITIONS = {
@@ -45,13 +44,36 @@ public final class EnemyManager implements Disposable {
     }
 
     public int damageInRange(float x, float z, float range, int damage) {
+        return damageInRange(x, z, range, damage, 0f);
+    }
+
+    public int damageInRange(float x, float z, float range, int damage, float knockbackForce) {
         int hits = 0;
         for (Enemy enemy : enemies) {
             if (!enemy.isAlive()) continue;
             float dx = enemy.getX() - x;
             float dz = enemy.getZ() - z;
             if (dx * dx + dz * dz <= range * range) {
-                enemy.damage(damage);
+                enemy.takeDamage(damage, dx, dz, knockbackForce);
+                hits++;
+            }
+        }
+        return hits;
+    }
+
+    public int damageInFront(float x, float z, float facingX, float facingZ,
+                             float range, int damage, float knockbackForce) {
+        int hits = 0;
+        for (Enemy enemy : enemies) {
+            if (!enemy.isAlive()) continue;
+            float dx = enemy.getX() - x;
+            float dz = enemy.getZ() - z;
+            float distanceSquared = dx * dx + dz * dz;
+            if (distanceSquared > range * range || distanceSquared <= 0.0001f) continue;
+            float distance = (float) Math.sqrt(distanceSquared);
+            float facingDot = (dx / distance) * facingX + (dz / distance) * facingZ;
+            if (facingDot >= 0.35f) {
+                enemy.takeDamage(damage, dx, dz, knockbackForce);
                 hits++;
             }
         }
@@ -69,7 +91,7 @@ public final class EnemyManager implements Disposable {
     public int getEnemiesDefeated() { return enemiesDefeated; }
     public boolean isCleared() { return enemies.size == 0; }
 
-    public void appendInstances(List<ModelInstance> destination) {
+    public void appendInstances(Array<ModelInstance> destination) {
         for (Enemy enemy : enemies) {
             for (ModelInstance instance : enemy.getInstances()) {
                 destination.add(instance);

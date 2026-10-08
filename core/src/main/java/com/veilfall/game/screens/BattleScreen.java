@@ -25,8 +25,6 @@ import com.veilfall.game.player.PlayerCombat;
 import com.veilfall.game.player.PlayerController;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
 
 public final class BattleScreen extends AbstractGameScreen {
     private final ArenaData arena;
@@ -37,7 +35,12 @@ public final class BattleScreen extends AbstractGameScreen {
     private final EnemyManager enemyManager;
     private final Label healthLabel;
     private final Label enemiesLabel;
+    private final Label shieldBashLabel;
+    private final Label groundSlamLabel;
+    private final Label veilGuardLabel;
+    private final Label dodgeLabel;
     private final Cell<Image> healthFillCell;
+    private final Array<ModelInstance> renderInstances = new Array<>();
     private final float healthBarWidth = 200f;
     private float elapsedSeconds;
     private boolean resultShown;
@@ -51,10 +54,11 @@ public final class BattleScreen extends AbstractGameScreen {
                     .filter(candidate -> candidate.getCharacterId() == character.getId())
                     .findFirst()
                     .orElseThrow(() -> new SQLException("No weapon is assigned to " + character.getName()));
+            var skills = game.getSkillRepository().getSkillsForCharacter(character.getId());
             player = new Player(character, weapon);
-            playerCombat = new PlayerCombat(player);
+            playerCombat = new PlayerCombat(player, skills);
             enemyManager = new EnemyManager(game.getMobRepository());
-        } catch (SQLException exception) {
+        } catch (SQLException | IllegalArgumentException exception) {
             throw new GdxRuntimeException("Failed to load battle definitions from SQLite", exception);
         }
         playerController = new PlayerController(player, playerCombat, enemyManager);
@@ -88,6 +92,19 @@ public final class BattleScreen extends AbstractGameScreen {
             }
         });
         hud.add(back).left().width(190f).height(34f).padTop(3f);
+
+        Table abilityHud = new Table();
+        abilityHud.setFillParent(true);
+        abilityHud.bottom().left().pad(14f);
+        stage.addActor(abilityHud);
+        shieldBashLabel = game.getUiTheme().label("");
+        groundSlamLabel = game.getUiTheme().label("");
+        veilGuardLabel = game.getUiTheme().label("");
+        dodgeLabel = game.getUiTheme().label("");
+        abilityHud.add(shieldBashLabel).left().padRight(14f);
+        abilityHud.add(groundSlamLabel).left().padRight(14f);
+        abilityHud.add(veilGuardLabel).left().padRight(14f);
+        abilityHud.add(dodgeLabel).left();
         updateHud();
     }
 
@@ -118,16 +135,12 @@ public final class BattleScreen extends AbstractGameScreen {
             return;
         }
 
-        Array<ModelInstance> instances = new Array<>();
+        renderInstances.clear();
         for (ModelInstance instance : player.getInstances()) {
-            instances.add(instance);
+            renderInstances.add(instance);
         }
-        List<ModelInstance> enemyInstances = new ArrayList<>();
-        enemyManager.appendInstances(enemyInstances);
-        for (ModelInstance instance : enemyInstances) {
-            instances.add(instance);
-        }
-        game.getRenderer().render(instances);
+        enemyManager.appendInstances(renderInstances);
+        game.getRenderer().render(renderInstances);
         drawStage(frameDelta);
     }
 
@@ -136,6 +149,22 @@ public final class BattleScreen extends AbstractGameScreen {
                 + " / " + player.getMaxHealth());
         enemiesLabel.setText("Enemies Remaining: " + enemyManager.getAliveCount());
         healthFillCell.width(healthBarWidth * player.getCurrentHealth() / player.getMaxHealth());
+        updateAbilityLabel(shieldBashLabel, "Q Shield Bash", playerCombat.getShieldBashCooldownRemaining());
+        updateAbilityLabel(groundSlamLabel, "E Ground Slam", playerCombat.getGroundSlamCooldownRemaining());
+        updateAbilityLabel(veilGuardLabel,
+                player.isGuarding() ? String.format("R Veil Guard %.1fs", player.getGuardRemaining()) : "R Veil Guard",
+                playerCombat.getVeilGuardCooldownRemaining());
+        updateAbilityLabel(dodgeLabel, "SPACE Dodge", playerCombat.getDodgeCooldownRemaining());
+    }
+
+    private static void updateAbilityLabel(Label label, String name, float cooldownRemaining) {
+        if (cooldownRemaining > 0f) {
+            label.setText(String.format("%s (%.1f)", name, cooldownRemaining));
+            label.setColor(Color.GRAY);
+        } else {
+            label.setText(name);
+            label.setColor(Color.WHITE);
+        }
     }
 
     private void showResult(boolean victory) {

@@ -30,6 +30,9 @@ public final class Enemy implements Disposable {
     private float attackCooldown;
     private float hitFlash;
     private float deathTimer = -1f;
+    private float knockbackRemaining;
+    private float knockbackX;
+    private float knockbackZ;
 
     public Enemy(MobData data, float x, float z) {
         this.data = data;
@@ -50,6 +53,7 @@ public final class Enemy implements Disposable {
     public Vector3 getPosition() { return position; }
     public float getAttackCooldown() { return attackCooldown; }
     public boolean canAttack() { return attackCooldown <= 0f && isAlive(); }
+    public boolean isKnockedBack() { return knockbackRemaining > 0f; }
 
     public Iterable<ModelInstance> getInstances() {
         return instances;
@@ -57,6 +61,13 @@ public final class Enemy implements Disposable {
 
     public void updateTimers(float delta) {
         if (attackCooldown > 0f) attackCooldown -= delta;
+        if (knockbackRemaining > 0f) {
+            float step = Math.min(knockbackRemaining, delta);
+            position.x += knockbackX * step;
+            position.z += knockbackZ * step;
+            knockbackRemaining = Math.max(0f, knockbackRemaining - delta);
+            updateModel();
+        }
         if (hitFlash > 0f) {
             hitFlash -= delta;
             if (hitFlash <= 0f) {
@@ -89,7 +100,7 @@ public final class Enemy implements Disposable {
         updateModel();
     }
 
-    public void damage(int amount) {
+    public void takeDamage(int amount, float directionX, float directionZ, float knockbackForce) {
         if (!isAlive()) return;
         currentHealth = MathUtils.clamp(currentHealth - amount, 0, maxHealth);
         if (!isAlive()) {
@@ -97,6 +108,12 @@ public final class Enemy implements Disposable {
         } else {
             hitFlash = 0.14f;
             setBodyColor(HIT_COLOR);
+            float directionLength = (float) Math.sqrt(directionX * directionX + directionZ * directionZ);
+            if (directionLength > 0.001f && knockbackForce > 0f) {
+                knockbackX = directionX / directionLength * knockbackForce;
+                knockbackZ = directionZ / directionLength * knockbackForce;
+                knockbackRemaining = 0.12f;
+            }
         }
         updateHealthBar();
     }
@@ -104,7 +121,7 @@ public final class Enemy implements Disposable {
     public void attack(Player player) {
         if (!canAttack()) return;
         attackCooldown = ATTACK_COOLDOWN;
-        player.receiveDamage(data.getDamage());
+        player.takeDamage(data.getDamage());
     }
 
     private void createModel() {

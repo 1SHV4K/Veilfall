@@ -5,7 +5,7 @@ import com.veilfall.game.player.Player;
 public final class EnemyAI {
     public void update(Enemy enemy, Player player, float delta) {
         enemy.updateTimers(delta);
-        if (!enemy.isAlive() || player.isDead()) return;
+        if (!enemy.isAlive() || enemy.isKnockedBack() || player.isDead()) return;
 
         float dx = player.getX() - enemy.getX();
         float dz = player.getZ() - enemy.getZ();

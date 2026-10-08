@@ -10,6 +10,7 @@ import com.veilfall.game.database.repository.ArenaRepository;
 import com.veilfall.game.database.repository.CharacterRepository;
 import com.veilfall.game.database.repository.MobRepository;
 import com.veilfall.game.database.repository.PlayerRepository;
+import com.veilfall.game.database.repository.SkillRepository;
 import com.veilfall.game.database.repository.WeaponRepository;
 import com.veilfall.game.database.DatabaseInitializer;
 import com.veilfall.game.database.DatabaseManager;
@@ -32,6 +33,7 @@ public class VeilfallGame extends Game {
 	private DatabaseManager databaseManager;
 	private UiTheme uiTheme;
 	private PlayerRepository playerRepository;
+	private SkillRepository skillRepository;
 	private CharacterRepository characterRepository;
 	private WeaponRepository weaponRepository;
 	private MobRepository mobRepository;
@@ -56,6 +58,7 @@ public class VeilfallGame extends Game {
 
 		renderer = new Renderer(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		playerRepository = new PlayerRepository(databaseManager);
+		skillRepository = new SkillRepository(databaseManager);
 		characterRepository = new CharacterRepository(databaseManager);
 		weaponRepository = new WeaponRepository(databaseManager);
 		mobRepository = new MobRepository(databaseManager);
@@ -78,6 +81,7 @@ public class VeilfallGame extends Game {
 	public Renderer getRenderer() { return renderer; }
 	public UiTheme getUiTheme() { return uiTheme; }
 	public PlayerRepository getPlayerRepository() { return playerRepository; }
+	public SkillRepository getSkillRepository() { return skillRepository; }
 	public CharacterRepository getCharacterRepository() { return characterRepository; }
 	public WeaponRepository getWeaponRepository() { return weaponRepository; }
 	public MobRepository getMobRepository() { return mobRepository; }
