@@ -9,14 +9,14 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 
 public final class CameraController extends InputAdapter {
-    private static final float BASE_VIEW_HEIGHT = 25f;
+    private static final float BASE_VIEW_HEIGHT = 34f;
     private static final float MIN_ZOOM = 0.65f;
     private static final float MAX_ZOOM = 2.5f;
 
     private final OrthographicCamera orthographicCamera = new OrthographicCamera();
     private final PerspectiveCamera perspectiveCamera = new PerspectiveCamera();
     private final Vector3 target = new Vector3(0f, 0f, 0f);
-    private final Vector3 viewOffset = new Vector3(16f, 20f, 16f);
+    private final Vector3 viewOffset = new Vector3(21f, 27f, 21f);
 
     private Projection projection = Projection.ORTHOGRAPHIC;
     private float zoom = 1f;

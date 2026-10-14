@@ -22,10 +22,13 @@ public final class ResultScreen extends AbstractGameScreen {
         addLine(root, "Result: " + (outcome.victory() ? "Victory" : "Defeat"));
         addLine(root, "Character: " + outcome.characterName());
         addLine(root, "Arena: " + outcome.arenaName());
+        addLine(root, "Weapon: " + outcome.weaponName());
         addLine(root, "Waves completed: " + outcome.wavesCompleted());
         addLine(root, "Enemies defeated: " + outcome.enemiesDefeated());
         addLine(root, "Bosses defeated: " + outcome.bossesDefeated());
         addLine(root, String.format("Duration: %.1f seconds", outcome.durationSeconds()));
+        addLine(root, "XP earned: +" + outcome.experienceEarned() + "    Total XP: " + outcome.totalExperience());
+        addLine(root, "Level: " + outcome.playerLevel() + "    Personal best wave: " + outcome.bestWave());
 
         TextButton returnButton = game.getUiTheme().button("RETURN TO LOBBY");
         returnButton.addListener(new ChangeListener() {

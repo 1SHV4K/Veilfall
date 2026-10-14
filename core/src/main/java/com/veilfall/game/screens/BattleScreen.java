@@ -20,9 +20,12 @@ import com.veilfall.game.data.ArenaData;
 import com.veilfall.game.data.CharacterData;
 import com.veilfall.game.data.WeaponData;
 import com.veilfall.game.enemies.EnemyManager;
+import com.veilfall.game.enemies.Enemy;
 import com.veilfall.game.player.Player;
 import com.veilfall.game.player.PlayerCombat;
 import com.veilfall.game.player.PlayerController;
+import com.veilfall.game.player.CharacterKit;
+import com.veilfall.game.player.ControlBindings;
 import com.veilfall.game.waves.WaveManager;
 
 import java.sql.SQLException;
@@ -30,6 +33,7 @@ import java.sql.SQLException;
 public final class BattleScreen extends AbstractGameScreen {
     private final ArenaData arena;
     private final CharacterData character;
+    private final WeaponData weapon;
     private final Player player;
     private final PlayerCombat playerCombat;
     private final PlayerController playerController;
@@ -37,6 +41,9 @@ public final class BattleScreen extends AbstractGameScreen {
     private final WaveManager waveManager;
     private final Label healthLabel;
     private final Label enemiesLabel;
+    private final Label bossLabel;
+    private final Cell<Image> bossHealthFillCell;
+    private final Table bossHealthBar;
     private final Label waveLabel;
     private final Label shieldBashLabel;
     private final Label groundSlamLabel;
@@ -48,25 +55,26 @@ public final class BattleScreen extends AbstractGameScreen {
     private float elapsedSeconds;
     private boolean resultShown;
 
-    public BattleScreen(VeilfallGame game, ArenaData arena, CharacterData character) {
+    public BattleScreen(VeilfallGame game, ArenaData arena, CharacterData character, WeaponData weapon) {
         super(game);
         this.arena = arena;
         this.character = character;
+        this.weapon = weapon;
         try {
-            WeaponData weapon = game.getWeaponRepository().getAll().stream()
-                    .filter(candidate -> candidate.getCharacterId() == character.getId())
-                    .findFirst()
-                    .orElseThrow(() -> new SQLException("No weapon is assigned to " + character.getName()));
+            if (weapon.getCharacterId() != character.getId()) {
+                throw new SQLException("Selected weapon does not belong to " + character.getName());
+            }
             var skills = game.getSkillRepository().getSkillsForCharacter(character.getId());
-            player = new Player(character, weapon);
-            playerCombat = new PlayerCombat(player, skills);
-            enemyManager = new EnemyManager(game.getMobRepository());
-            waveManager = new WaveManager(arena.getId(), game.getWaveRepository());
+            player = new Player(character, weapon, game.getModelAssets());
+            playerCombat = new PlayerCombat(player, skills, game.getAudioDirector());
+            enemyManager = new EnemyManager(game.getMobRepository(), game.getModelAssets());
+            waveManager = new WaveManager(arena.getId(), arena.getBossMobId(), game.getWaveRepository());
             waveManager.start(enemyManager);
         } catch (SQLException | IllegalArgumentException exception) {
             throw new GdxRuntimeException("Failed to load battle definitions from SQLite", exception);
         }
-        playerController = new PlayerController(player, playerCombat, enemyManager);
+        playerController = new PlayerController(player, playerCombat, enemyManager,
+                game.getRenderer().getCameraController());
 
         Table hud = new Table();
         hud.setFillParent(true);
@@ -91,6 +99,21 @@ public final class BattleScreen extends AbstractGameScreen {
 
         enemiesLabel = game.getUiTheme().label("");
         hud.add(enemiesLabel).left().padBottom(8f).row();
+        Label controls = game.getUiTheme().label("Left click: attack   Right click: move   Mouse: aim   Move: "
+                + ControlBindings.display("up") + ControlBindings.display("left")
+                + ControlBindings.display("down") + ControlBindings.display("right"));
+        hud.add(controls).left().padBottom(8f).row();
+        bossLabel = game.getUiTheme().label("");
+        bossHealthBar = new Table();
+        bossHealthBar.setBackground(new TextureRegionDrawable(white)
+                .tint(new Color(0.10f, 0.10f, 0.12f, 1f)));
+        Image bossFill = new Image(new TextureRegionDrawable(white)
+                .tint(new Color(0.82f, 0.16f, 0.22f, 1f)));
+        bossHealthFillCell = bossHealthBar.add(bossFill).left().width(0f).height(12f);
+        hud.add(bossLabel).left().padBottom(4f).row();
+        hud.add(bossHealthBar).width(240f).height(12f).left().padBottom(8f).row();
+        bossLabel.setVisible(false);
+        bossHealthBar.setVisible(false);
         TextButton back = game.getUiTheme().button("BACK TO ARENA SELECT");
         back.addListener(new ChangeListener() {
             @Override
@@ -151,6 +174,7 @@ public final class BattleScreen extends AbstractGameScreen {
         for (ModelInstance instance : player.getInstances()) {
             renderInstances.add(instance);
         }
+        playerCombat.appendEffectInstances(renderInstances);
         enemyManager.appendInstances(renderInstances);
         game.getRenderer().render(renderInstances);
         drawStage(frameDelta);
@@ -158,16 +182,31 @@ public final class BattleScreen extends AbstractGameScreen {
 
     private void updateHud() {
         updateWaveLabel();
-        healthLabel.setText(character.getName() + " HP: " + player.getCurrentHealth()
+        healthLabel.setText(character.getName() + " — " + weapon.getName() + " — "
+                + playerCombat.getKit().getBasicAttack()
+                + " — HP: " + player.getCurrentHealth()
                 + " / " + player.getMaxHealth());
-        enemiesLabel.setText("Enemies Remaining: " + enemyManager.getAliveCount());
+        enemiesLabel.setText("Enemies Remaining: " + enemyManager.getAliveCount()
+                + "   •   " + enemyManager.getAliveSummary());
         healthFillCell.width(healthBarWidth * player.getCurrentHealth() / player.getMaxHealth());
-        updateAbilityLabel(shieldBashLabel, "Q Shield Bash", playerCombat.getShieldBashCooldownRemaining());
-        updateAbilityLabel(groundSlamLabel, "E Ground Slam", playerCombat.getGroundSlamCooldownRemaining());
-        updateAbilityLabel(veilGuardLabel,
-                player.isGuarding() ? String.format("R Veil Guard %.1fs", player.getGuardRemaining()) : "R Veil Guard",
-                playerCombat.getVeilGuardCooldownRemaining());
-        updateAbilityLabel(dodgeLabel, "SPACE Dodge", playerCombat.getDodgeCooldownRemaining());
+        updateBossHud();
+        CharacterKit kit = playerCombat.getKit();
+        updateAbilityLabel(shieldBashLabel, ControlBindings.display("ability_q") + " " + kit.getAbilityQ(), playerCombat.getCooldownQ());
+        updateAbilityLabel(groundSlamLabel, ControlBindings.display("ability_e") + " " + kit.getAbilityE(), playerCombat.getCooldownE());
+        updateAbilityLabel(veilGuardLabel, ControlBindings.display("ability_r") + " " + kit.getAbilityR(), playerCombat.getCooldownR());
+        updateAbilityLabel(dodgeLabel, ControlBindings.display("dodge") + " Dodge", playerCombat.getDodgeCooldownRemaining());
+    }
+
+    private void updateBossHud() {
+        var currentWave = waveManager.getCurrentWave();
+        Enemy boss = currentWave != null && currentWave.isBossWave() ? enemyManager.getBossEnemy() : null;
+        boolean visible = boss != null;
+        bossLabel.setVisible(visible);
+        bossHealthBar.setVisible(visible);
+        if (!visible) return;
+        bossLabel.setText(boss.getData().getName() + (boss.isBossTelegraphing()
+                ? " — " + boss.getBossAttackName() + "! DODGE" : ""));
+        bossHealthFillCell.width(240f * boss.getCurrentHealth() / boss.getMaxHealth());
     }
 
     private void updateWaveLabel() {
@@ -200,13 +239,15 @@ public final class BattleScreen extends AbstractGameScreen {
         resultShown = true;
         game.showResult(new BattleOutcome(victory, character.getName(), arena.getName(),
                 victory ? waveManager.getTotalWaves() : Math.max(0, waveManager.getCurrentWaveNumber() - 1),
-                enemyManager.getEnemiesDefeated(), enemyManager.getBossesDefeated(), elapsedSeconds));
+                enemyManager.getEnemiesDefeated(), enemyManager.getBossesDefeated(), elapsedSeconds,
+                arena.getId(), character.getId(), weapon.getId(), weapon.getName(), 0, 0, 1, 0));
     }
 
     @Override
     public void dispose() {
         super.dispose();
         player.dispose();
+        playerCombat.dispose();
         enemyManager.dispose();
     }
 }

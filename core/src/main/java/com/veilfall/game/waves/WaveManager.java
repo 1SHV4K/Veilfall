@@ -18,16 +18,25 @@ public final class WaveManager {
     private float intermissionRemaining;
     private State state = State.WAITING;
 
-    public WaveManager(int arenaId, WaveRepository waveRepository) throws SQLException {
+    public WaveManager(int arenaId, int bossMobId, WaveRepository waveRepository) throws SQLException {
         waves = waveRepository.getWavesForArena(arenaId);
         if (waves.isEmpty()) {
             throw new SQLException("No waves are configured for arena " + arenaId);
         }
+        if (!waves.getLast().isBossWave()) {
+            throw new SQLException("The final wave for arena " + arenaId + " must be a boss wave");
+        }
         waveEnemies = new ArrayList<>(waves.size());
-        for (WaveData wave : waves) {
+        for (int index = 0; index < waves.size(); index++) {
+            WaveData wave = waves.get(index);
             List<WaveEnemyData> definitions = waveRepository.getEnemiesForWave(wave.getId());
             if (definitions.isEmpty()) {
                 throw new SQLException("Wave " + wave.getWaveNumber() + " has no enemy definitions");
+            }
+            if (index == waves.size() - 1 && definitions.stream()
+                    .noneMatch(definition -> definition.getMobId() == bossMobId)) {
+                throw new SQLException("Final wave " + wave.getWaveNumber()
+                        + " does not contain the arena's configured boss " + bossMobId);
             }
             waveEnemies.add(definitions);
         }

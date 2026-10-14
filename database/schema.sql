@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE TABLE IF NOT EXISTS weapons (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    character_id INTEGER NOT NULL UNIQUE,
+    character_id INTEGER NOT NULL,
     damage INTEGER NOT NULL CHECK (damage >= 0),
     attack_speed REAL NOT NULL CHECK (attack_speed > 0),
     attack_range REAL NOT NULL CHECK (attack_range > 0),
@@ -91,11 +91,13 @@ CREATE TABLE IF NOT EXISTS matches (
     result TEXT NOT NULL CHECK (result IN ('WIN', 'LOSS')),
     arena_id INTEGER NOT NULL,
     character_id INTEGER NOT NULL,
+    weapon_id INTEGER,
     waves_reached INTEGER NOT NULL DEFAULT 0 CHECK (waves_reached >= 0),
     enemies_defeated INTEGER NOT NULL DEFAULT 0 CHECK (enemies_defeated >= 0),
     bosses_defeated INTEGER NOT NULL DEFAULT 0 CHECK (bosses_defeated >= 0),
     duration_seconds REAL NOT NULL DEFAULT 0 CHECK (duration_seconds >= 0),
     played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (arena_id) REFERENCES arenas(id),
-    FOREIGN KEY (character_id) REFERENCES characters(id)
+    FOREIGN KEY (character_id) REFERENCES characters(id),
+    FOREIGN KEY (weapon_id) REFERENCES weapons(id)
 );

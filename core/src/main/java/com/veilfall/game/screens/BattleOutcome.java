@@ -7,5 +7,13 @@ public record BattleOutcome(
         int wavesCompleted,
         int enemiesDefeated,
         int bossesDefeated,
-        float durationSeconds) {
+        float durationSeconds,
+        int arenaId,
+        int characterId,
+        int weaponId,
+        String weaponName,
+        int experienceEarned,
+        int totalExperience,
+        int playerLevel,
+        int bestWave) {
 }

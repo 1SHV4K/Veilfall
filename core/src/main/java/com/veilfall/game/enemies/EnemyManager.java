@@ -8,26 +8,30 @@ import com.veilfall.game.data.WaveData;
 import com.veilfall.game.data.WaveEnemyData;
 import com.veilfall.game.database.repository.MobRepository;
 import com.veilfall.game.player.Player;
+import com.veilfall.game.rendering.ModelAssets;
 
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 public final class EnemyManager implements Disposable {
     private static final float[][] SPAWN_POSITIONS = {
-            {-12f, 0f}, {12f, 0f}, {0f, -12f}, {0f, 12f},
-            {-9f, -9f}, {9f, -9f}, {-9f, 9f}, {9f, 9f}
+            {-20f, 0f}, {20f, 0f}, {0f, -20f}, {0f, 20f},
+            {-16f, -16f}, {16f, -16f}, {-16f, 16f}, {16f, 16f}
     };
 
     private final Array<Enemy> enemies = new Array<>();
     private final EnemyAI enemyAI = new EnemyAI();
     private final Map<Integer, MobData> mobsById = new HashMap<>();
+    private final ModelAssets modelAssets;
     private int enemiesDefeated;
     private int bossesDefeated;
     private int nextSpawnIndex;
 
-    public EnemyManager(MobRepository mobRepository) throws SQLException {
+    public EnemyManager(MobRepository mobRepository, ModelAssets modelAssets) throws SQLException {
+        this.modelAssets = modelAssets;
         for (MobData mob : mobRepository.getAll()) {
             mobsById.put(mob.getId(), mob);
         }
@@ -45,7 +49,7 @@ public final class EnemyManager implements Disposable {
             MobData scaledMob = scaleMob(baseMob, wave);
             for (int count = 0; count < definition.getQuantity(); count++) {
                 float[] position = nextSpawnPosition();
-                enemies.add(new Enemy(scaledMob, position[0], position[1]));
+                enemies.add(new Enemy(scaledMob, position[0], position[1], modelAssets));
             }
         }
         if (enemies.isEmpty()) {
@@ -103,6 +107,31 @@ public final class EnemyManager implements Disposable {
         return hits;
     }
 
+    public boolean damageNearestInFront(float x, float z, float facingX, float facingZ,
+                                        float range, int damage, float knockbackForce) {
+        Enemy closest = null;
+        float closestDistanceSquared = range * range;
+        for (Enemy enemy : enemies) {
+            if (!enemy.isAlive()) continue;
+            float dx = enemy.getX() - x;
+            float dz = enemy.getZ() - z;
+            float distanceSquared = dx * dx + dz * dz;
+            if (distanceSquared <= 0.0001f || distanceSquared > closestDistanceSquared) continue;
+            float distance = (float) Math.sqrt(distanceSquared);
+            float facingDot = (dx / distance) * facingX + (dz / distance) * facingZ;
+            if (facingDot >= 0.35f) {
+                closest = enemy;
+                closestDistanceSquared = distanceSquared;
+            }
+        }
+        if (closest == null) return false;
+        float dx = closest.getX() - x;
+        float dz = closest.getZ() - z;
+        closest.takeDamage(damage, dx, dz, knockbackForce);
+        recordDefeat(closest);
+        return true;
+    }
+
     public int getAliveCount() {
         int alive = 0;
         for (Enemy enemy : enemies) {
@@ -111,8 +140,25 @@ public final class EnemyManager implements Disposable {
         return alive;
     }
 
+    public String getAliveSummary() {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (Enemy enemy : enemies) {
+            if (enemy.isAlive()) counts.merge(enemy.getData().getName(), 1, Integer::sum);
+        }
+        if (counts.isEmpty()) return "Wave clear";
+        return "Fighting: " + counts.entrySet().stream()
+                .map(entry -> entry.getKey() + " × " + entry.getValue())
+                .collect(java.util.stream.Collectors.joining("   "));
+    }
+
     public int getEnemiesDefeated() { return enemiesDefeated; }
     public int getBossesDefeated() { return bossesDefeated; }
+    public Enemy getBossEnemy() {
+        for (Enemy enemy : enemies) {
+            if (enemy.getData().isBoss() && enemy.isAlive()) return enemy;
+        }
+        return null;
+    }
     public boolean isCleared() { return getAliveCount() == 0 && enemies.size == 0; }
 
     public void appendInstances(Array<ModelInstance> destination) {

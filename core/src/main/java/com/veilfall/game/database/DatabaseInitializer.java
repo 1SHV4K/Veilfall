@@ -38,6 +38,8 @@ public final class DatabaseInitializer {
                         }
                     }
                 }
+                migrateWeaponChoices(connection);
+                migrateMatchWeapon(connection);
                 seedDefaults(connection);
                 connection.commit();
             } catch (SQLException | RuntimeException exception) {
@@ -62,17 +64,28 @@ public final class DatabaseInitializer {
         insertCharacter(connection, "Ash Mage", 80, 30, 2.7, 4, 7.0);
 
         insertWeapon(connection, "Rusted Sword", "Warden", 18, 1.2, 1.5);
+        insertWeapon(connection, "Gravebreaker Maul", "Warden", 29, 0.72, 2.1);
         insertWeapon(connection, "Veil Bow", "Veil Archer", 25, 1.0, 8.0);
+        insertWeapon(connection, "Longshot Recurve", "Veil Archer", 17, 1.55, 11.5);
         insertWeapon(connection, "Ash Staff", "Ash Mage", 30, 0.8, 7.0);
+        insertWeapon(connection, "Ember Rod", "Ash Mage", 19, 1.35, 8.5);
 
         insertSkill(connection, "Warden", "Shield Bash", "Q", 25, 4);
         insertSkill(connection, "Warden", "Ground Slam", "E", 35, 7);
         insertSkill(connection, "Warden", "Veil Guard", "R", 0, 15);
+        insertSkill(connection, "Veil Archer", "Piercing Shot", "Q", 42, 4);
+        insertSkill(connection, "Veil Archer", "Arrow Volley", "E", 24, 7);
+        insertSkill(connection, "Veil Archer", "Veilstep", "R", 0, 12);
+        insertSkill(connection, "Ash Mage", "Arcane Lance", "Q", 48, 4);
+        insertSkill(connection, "Ash Mage", "Veil Nova", "E", 32, 7);
+        insertSkill(connection, "Ash Mage", "Aether Ward", "R", 0, 15);
 
         insertMob(connection, "Veil Wretch", "UNDEAD", 60, 8, 2.0, 1.2, false);
         insertMob(connection, "Bone Stalker", "UNDEAD", 100, 14, 1.7, 1.3, false);
         insertMob(connection, "Veil Brute", "ELITE", 300, 25, 1.2, 1.5, false);
         insertMob(connection, "Hollow Knight", "BOSS", 2500, 40, 1.5, 2.0, true);
+        insertMob(connection, "Cinder Abomination", "BOSS_NOVA", 1900, 32, 1.25, 2.2, true);
+        insertMob(connection, "Tide Matriarch", "BOSS_SURGE", 2850, 36, 1.1, 2.5, true);
 
         int bossMobId = getId(connection, "mobs", "Hollow Knight");
         execute(connection, """
@@ -96,6 +109,95 @@ public final class DatabaseInitializer {
         insertWaveEnemy(connection, arenaId, 4, "Bone Stalker", 4);
         insertWaveEnemy(connection, arenaId, 4, "Veil Brute", 2);
         insertWaveEnemy(connection, arenaId, 5, "Hollow Knight", 1);
+
+        int ashArenaId = seedArena(connection, "Ashen Reach",
+                "A scorched battlefield where the Veil leaks through the old kiln.",
+                2, "ASHEN", "Cinder Abomination");
+        seedArenaWaves(connection, ashArenaId, new String[][]{
+                {"Veil Wretch:6"},
+                {"Veil Wretch:4", "Bone Stalker:3"},
+                {"Bone Stalker:4", "Veil Brute:2"},
+                {"Cinder Abomination:1"}
+        });
+
+        int chapelArenaId = seedArena(connection, "Sunken Chapel",
+                "A drowned sanctuary guarded by an ancient tide spirit.",
+                3, "DROWNED", "Tide Matriarch");
+        seedArenaWaves(connection, chapelArenaId, new String[][]{
+                {"Bone Stalker:5"},
+                {"Veil Wretch:4", "Bone Stalker:3"},
+                {"Bone Stalker:3", "Veil Brute:3"},
+                {"Tide Matriarch:1"}
+        });
+    }
+
+    private static int seedArena(Connection connection, String name, String description, int difficulty,
+                                 String environment, String bossName) throws SQLException {
+        execute(connection, """
+                INSERT OR IGNORE INTO arenas (name, description, difficulty, environment, boss_mob_id)
+                VALUES (?, ?, ?, ?, ?)
+                """, name, description, difficulty, environment, getId(connection, "mobs", bossName));
+        return getId(connection, "arenas", name);
+    }
+
+    private static void seedArenaWaves(Connection connection, int arenaId, String[][] waves) throws SQLException {
+        for (int index = 0; index < waves.length; index++) {
+            int waveNumber = index + 1;
+            boolean bossWave = waveNumber == waves.length;
+            insertWave(connection, arenaId, waveNumber, 1.0 + index * 0.12,
+                    1.0 + index * 0.08, bossWave);
+            for (String entry : waves[index]) {
+                String[] parts = entry.split(":");
+                insertWaveEnemy(connection, arenaId, waveNumber, parts[0], Integer.parseInt(parts[1]));
+            }
+        }
+    }
+
+    private static void migrateWeaponChoices(Connection connection) throws SQLException {
+        String createSql;
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'weapons'");
+             ResultSet result = statement.executeQuery()) {
+            if (!result.next()) return;
+            createSql = result.getString(1);
+        }
+        if (createSql == null || !createSql.toLowerCase().matches("(?s).*character_id\\s+integer\\s+not\\s+null\\s+unique.*")) {
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    CREATE TABLE weapons_replacement (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        character_id INTEGER NOT NULL,
+                        damage INTEGER NOT NULL CHECK (damage >= 0),
+                        attack_speed REAL NOT NULL CHECK (attack_speed > 0),
+                        attack_range REAL NOT NULL CHECK (attack_range > 0),
+                        FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+                    )
+                    """);
+            statement.execute("INSERT INTO weapons_replacement SELECT * FROM weapons");
+            statement.execute("DROP TABLE weapons");
+            statement.execute("ALTER TABLE weapons_replacement RENAME TO weapons");
+        }
+    }
+
+    private static void migrateMatchWeapon(Connection connection) throws SQLException {
+        boolean hasWeaponId = false;
+        try (Statement statement = connection.createStatement();
+             ResultSet columns = statement.executeQuery("PRAGMA table_info(matches)")) {
+            while (columns.next()) {
+                if ("weapon_id".equalsIgnoreCase(columns.getString("name"))) {
+                    hasWeaponId = true;
+                    break;
+                }
+            }
+        }
+        if (!hasWeaponId) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE matches ADD COLUMN weapon_id INTEGER REFERENCES weapons(id)");
+            }
+        }
     }
 
     private static void insertCharacter(Connection connection, String name, int hp, int attack,
